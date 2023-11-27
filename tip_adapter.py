@@ -3,11 +3,14 @@ from PIL import Image
 from typing import List, Dict
 
 import torch
+import torch.nn as nn
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset as TorchDataset
 
 import clip
 from utils import *
+# from . import clip
+# from .utils import *
 
 
 class DatasetWrapper(TorchDataset):
@@ -112,6 +115,7 @@ class TipAdapter:
 
         self._clip_model, self._preprocess = clip.load(clip_backbone, device=device)
         self._clip_model.eval()
+        self._adapter = None
 
         self._train_tranform = transforms.Compose([
             transforms.RandomResizedCrop(size=224, scale=(0.5, 1), interpolation=transforms.InterpolationMode.BICUBIC),
@@ -124,12 +128,15 @@ class TipAdapter:
     def create_cache(
         self, 
         few_shot_data: Dict[str, List[PIL.Image.Image]],
+        finetune: bool = True
     ) -> None:
         """ Creates the KV-cache
         Args: 
             few_shot_data: a dictionary where each key is the label and the value is a list of
                 `PIL.Image` corresponding to an example image. The `PIL.Image` objects are assumed
                 to be `RGB`, not `RGBA` (note make sure to do `.convert('RGB')`)      
+            finetune: a boolean variable which represents whether to finetune the tip adapter 
+                (empirically shown to provide better results, but takes longer)
         """
         # store class names
         self._class_names = list(few_shot_data.keys())
@@ -181,12 +188,75 @@ class TipAdapter:
         self._cache_keys = cache_keys
         self._cache_values = cache_values
 
-    def run(self, imgs: List[PIL.Image.Image]) -> List[str]:
+        if finetune:
+            adapter = nn.Linear(cache_keys.shape[0], cache_keys.shape[1], bias=False).to(
+                self._clip_model.dtype
+            ).to(self._device)
+            adapter.weight = nn.Parameter(cache_keys.t())
+
+            optimizer = torch.optim.AdamW(adapter.parameters(), lr=0.001, eps=1e-4)
+
+            train_loader_F = self._build_data_loader(
+                data_source=data_source,
+                batch_size=256,
+                tfm=self._train_tranform, 
+                is_train=True, 
+                shuffle=True
+            )
+
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, 20 * len(train_loader_F))
+
+            for train_idx in range(20):
+                # Train
+                adapter.train()
+                correct_samples, all_samples = 0, 0
+                loss_list = []
+                print('Train Epoch: {:} / {:}'.format(train_idx, 20))
+
+                for i, (images, target) in enumerate(tqdm(train_loader_F)):
+                    images, target = images.to(self._device), target.to(self._device)
+                    with torch.no_grad():
+                        image_features = self._clip_model.encode_image(images)
+                        image_features /= image_features.norm(dim=-1, keepdim=True)
+
+                    affinity = adapter(image_features)
+                    cache_logits = ((-1) * (self._beta - self._beta * affinity)).exp() @ cache_values
+                    clip_logits = 100. * image_features @ self._clip_weights
+                    tip_logits = clip_logits + cache_logits * self._alpha
+
+                    loss = F.cross_entropy(tip_logits, target)
+
+                    optimizer.zero_grad()
+                    loss.backward()
+                    optimizer.step()
+                    scheduler.step()
+                current_lr = scheduler.get_last_lr()[0]
+                # print('LR: {:.6f}, Acc: {:.4f} ({:}/{:}), Loss: {:.4f}'.format(current_lr, correct_samples / all_samples, correct_samples, all_samples, sum(loss_list)/len(loss_list)))
+
+                # Eval
+                adapter.eval()
+                self._adapter = adapter
+
+    def run(self, imgs: List[PIL.Image.Image], finetune: bool = True) -> List[str]:
+        '''Run inference on a set of images
+        Args: 
+            finetune: a boolean variable which represents whether to finetune the tip adapter 
+                (empirically shown to provide better results, but takes longer)
+
+        '''
         features = self._get_test_features(imgs)
 
         clip_logits = 100. * features @ self._clip_weights
 
-        affinity = features @ self._cache_keys
+        if finetune:
+            if self._adapter is None:
+                raise Exception(
+                    "First generate KV cache with `finetune` set to True!"
+                )
+            affinity = self._adapter(features)
+        else:
+            affinity = features @ self._cache_keys
+
         cache_logits = ((-1) * (self._beta - self._beta* affinity)).exp() @ self._cache_values
 
         tip_logits = clip_logits + cache_logits * self._alpha
@@ -205,7 +275,8 @@ class TipAdapter:
         '''
         return {
             "keys": self._cache_keys, 
-            "values": self._cache_values
+            "values": self._cache_values,
+            "adapter": self._adapter
         }
 
     @cache.setter
@@ -215,6 +286,7 @@ class TipAdapter:
         try:
             self._cache_keys = cache["keys"].to(self._device)
             self._cache_values = cache["values"].to(self._device)
+            self._adapter = cache["adapter"].to(self._device)
         except KeyError as e:
             raise ValueError(f"Missing key in cache dictionary: {e}")
 
@@ -240,7 +312,8 @@ class TipAdapter:
         """Saves the cache values to a file."""
         cache_data = {
             "keys": self._cache_keys,
-            "values": self._cache_values
+            "values": self._cache_values,
+            "adapter": self._adapter
         }
         torch.save(cache_data, file_path)
 
@@ -344,8 +417,8 @@ if __name__ == "__main__":
 
         data[label] = train_ims
         test_data[label] = test_ims
-    
-    tip_adapter.create_cache(data)
+
+    tip_adapter.create_cache(data,finetune=True)
     tip_adapter.save_cache_values("cache_values.pt")
 
     tip_adapter.load_cache_values("cache_values.pt")
@@ -355,5 +428,5 @@ if __name__ == "__main__":
 
     for label, im_list in test_data.items():
         print("Label: ", label)
-        predicted_classes = tip_adapter.run(im_list)
+        predicted_classes = tip_adapter.run(im_list, finetune=True)
         print("Predicted classes: ", predicted_classes)
