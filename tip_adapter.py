@@ -276,7 +276,9 @@ class TipAdapter:
         return {
             "keys": self._cache_keys, 
             "values": self._cache_values,
-            "adapter": self._adapter
+            "adapter": self._adapter,
+            "clip_weights": self._clip_weights,
+            "class_names": self._class_names
         }
 
     @cache.setter
@@ -287,6 +289,8 @@ class TipAdapter:
             self._cache_keys = cache["keys"].to(self._device)
             self._cache_values = cache["values"].to(self._device)
             self._adapter = cache["adapter"].to(self._device)
+            self._clip_weights = cache["clip_weights"].to(self._device)
+            self._class_names = cache["class_names"].to(self._device)
         except KeyError as e:
             raise ValueError(f"Missing key in cache dictionary: {e}")
 
@@ -310,11 +314,7 @@ class TipAdapter:
         
     def save_cache_values(self, file_path: str):
         """Saves the cache values to a file."""
-        cache_data = {
-            "keys": self._cache_keys,
-            "values": self._cache_values,
-            "adapter": self._adapter
-        }
+        cache_data = self.cache
         torch.save(cache_data, file_path)
 
 
