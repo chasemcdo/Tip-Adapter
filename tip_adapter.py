@@ -9,9 +9,6 @@ from torch.utils.data import Dataset as TorchDataset
 
 import clip
 from utils import *
-# from . import clip
-# from .utils import *
-
 
 class DatasetWrapper(TorchDataset):
     def __init__(self, data_source, input_size, transform=None, is_train=False,
