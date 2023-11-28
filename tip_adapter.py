@@ -271,10 +271,14 @@ class TipAdapter:
     def cache(self) -> Dict[str, torch.Tensor]:
         '''Returns the cache values
         '''
+        adapter_weights = None
+        if self._adapter is not None:
+            adapter_weights = self._adapter.data
+
         return {
             "keys": self._cache_keys, 
             "values": self._cache_values,
-            "adapter": self._adapter,
+            "adapter_weights": adapter_weights,
             "clip_weights": self._clip_weights,
             "class_names": self._class_names
         }
@@ -286,7 +290,8 @@ class TipAdapter:
         try:
             self._cache_keys = cache["keys"].to(self._device)
             self._cache_values = cache["values"].to(self._device)
-            self._adapter = cache["adapter"].to(self._device)
+            if cache["adapter_weights"] is not None:
+                self._adapter = nn.Parameter(cache["adapter_weights"]).to(self._device)
             self._clip_weights = cache["clip_weights"].to(self._device)
             self._class_names = cache["class_names"]
         except KeyError as e:
