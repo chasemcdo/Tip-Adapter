@@ -290,7 +290,7 @@ class TipAdapter:
             self._cache_values = cache["values"].to(self._device)
             self._adapter = cache["adapter"].to(self._device)
             self._clip_weights = cache["clip_weights"].to(self._device)
-            self._class_names = cache["class_names"].to(self._device)
+            self._class_names = cache["class_names"]
         except KeyError as e:
             raise ValueError(f"Missing key in cache dictionary: {e}")
 
