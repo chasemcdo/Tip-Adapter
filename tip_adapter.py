@@ -138,7 +138,7 @@ class TipAdapter:
         # ensure each of the PIL Images are RGB instead of RGBA
         for label in few_shot_data.keys():
             img_list = few_shot_data[label]
-            img_list = self._convert_rgba_to_rgb(few_shot_data)
+            img_list = self._convert_rgba_to_rgb(img_list)
             few_shot_data[label] = img_list
         # store class names
         self._class_names = list(few_shot_data.keys())
@@ -245,7 +245,7 @@ class TipAdapter:
             finetune: a boolean variable which represents whether to finetune the tip adapter 
                 (empirically shown to provide better results, but takes longer)
         '''
-        imgs = self._convert_rgbs_to_rgb(imgs)
+        imgs = self._convert_rgba_to_rgb(imgs)
         features = self._get_test_features(imgs)
 
         clip_logits = 100. * features @ self._clip_weights
@@ -422,10 +422,10 @@ if __name__ == "__main__":
         test_ims = list()
 
         for img in imgs[:num_train]:
-            train_ims.append(Image.open(img).convert("RGB"))
+            train_ims.append(Image.open(img).convert("RGBA"))
 
         for img in imgs[num_train:]:
-            test_ims.append(Image.open(img).convert("RGB"))
+            test_ims.append(Image.open(img).convert("RGBA"))
 
         data[label] = train_ims
         test_data[label] = test_ims
