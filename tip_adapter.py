@@ -271,7 +271,7 @@ class TipAdapter:
 
         return predicted_classes
     
-    def _convert_rgba_to_rgb(self, imgs):
+    def _convert_rgba_to_rgb(self, imgs: List[PIL.Image.Image]) -> List[PIL.Image.Image]:
         return [
             img.convert("RGB") for img in imgs
         ]
@@ -289,7 +289,7 @@ class TipAdapter:
         }
 
     @cache.setter
-    def cache(self, cache: Dict[str, torch.Tensor]):
+    def cache(self, cache: Dict[str, torch.Tensor]) -> None:
         '''Sets the cache values
         '''
         try:
@@ -315,7 +315,7 @@ class TipAdapter:
     def load_cache_values(
         self, 
         file_path: str
-    ):
+    ) -> None:
         """Loads the cache from a file
         """
         try:
@@ -324,7 +324,7 @@ class TipAdapter:
         except FileNotFoundError:
             raise FileNotFoundError(f"The file {file_path} was not found.")
         
-    def save_cache_values(self, file_path: str):
+    def save_cache_values(self, file_path: str) -> None:
         """Saves the cache values to a file."""
         cache_data = self.cache
         torch.save(cache_data, file_path)
@@ -355,7 +355,7 @@ class TipAdapter:
 
         return features
 
-    def _convert_data_dict_to_list(self, data_source: Dict[str, List[PIL.Image.Image]]):
+    def _convert_data_dict_to_list(self, data_source: Dict[str, List[PIL.Image.Image]]) -> List[Dict]:
         data_list = list()
         for idx, class_name in enumerate(self._class_names):
             if class_name not in data_source.keys():
