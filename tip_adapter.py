@@ -239,7 +239,7 @@ class TipAdapter:
                 adapter.eval()
                 self._adapter = adapter
 
-    def run(self, imgs: List[PIL.Image.Image], finetune: bool = True) -> List[str]:
+    def run(self, imgs: List[PIL.Image.Image], finetune: bool = True) -> List[Dict]:
         '''Run inference on a set of images
         Args: 
             finetune: a boolean variable which represents whether to finetune the tip adapter 
@@ -262,12 +262,18 @@ class TipAdapter:
         cache_logits = ((-1) * (self._beta - self._beta* affinity)).exp() @ self._cache_values
 
         tip_logits = clip_logits + cache_logits * self._alpha
+        probs = torch.softmax(tip_logits,dim=1)
 
         predicted_labels = torch.argmax(tip_logits, dim=1).cpu().numpy()
+        predicted_scores = torch.max(probs, dim=1)[0].detach().cpu().numpy()
+        
 
         predicted_classes = list()
-        for label in predicted_labels:
-            predicted_classes.append(self._class_names[label])
+        for score, label in zip(predicted_scores, predicted_labels):
+            predicted_classes.append({
+                "label": self._class_names[label],
+                "score": score
+            })
 
         return predicted_classes
     
