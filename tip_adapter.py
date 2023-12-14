@@ -239,7 +239,7 @@ class TipAdapter:
                 adapter.eval()
                 self._adapter = adapter
 
-    def run(self, imgs: List[PIL.Image.Image], finetune: bool = True) -> List[str]:
+    def run(self, imgs: List[PIL.Image.Image], finetune: bool = True) -> List[Dict]:
         '''Run inference on a set of images
         Args: 
             finetune: a boolean variable which represents whether to finetune the tip adapter 
