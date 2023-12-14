@@ -265,7 +265,7 @@ class TipAdapter:
         probs = torch.softmax(tip_logits,dim=1)
 
         predicted_labels = torch.argmax(tip_logits, dim=1).cpu().numpy()
-        predicted_scores = torch.max(probs, dim=1)[0].detach().cpu().numpy()
+        predicted_scores = torch.max(probs, dim=1)[0].detach().cpu().numpy().tolist()
         
 
         predicted_classes = list()
